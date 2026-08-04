@@ -1778,6 +1778,8 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
   // DeclareWorkspaceRequirements() on each kernel with resolved input shapes.
   // This collects workspace slot requirements for future offset planning.
   {
+    size_t total_level2_workspace = 0;
+    size_t nodes_with_workspace = 0;
     for (const auto& node : graph_viewer_->Nodes()) {
       auto* kernel = GetMutableKernel(node.Index());
       if (kernel == nullptr) continue;
@@ -1790,15 +1792,24 @@ Status SessionState::FinalizeSessionStateImpl(const std::basic_string<PATH_CHAR_
           gsl::make_span(resolved->data(), resolved->size()), requirements));
 
       if (!requirements.empty()) {
-        LOGS(logger_, VERBOSE) << "Level-2 workspace: node '" << node.Name()
-                               << "' declared " << requirements.size() << " workspace slot(s)";
-        // TODO: Store requirements in WorkspacePattern for offset planning.
-        // For now, log the declarations so we can verify the wiring works.
+        size_t node_workspace = 0;
         for (const auto& req : requirements) {
-          LOGS(logger_, VERBOSE) << "  slot_id=" << req.slot_id
+          node_workspace += req.size_bytes;
+          LOGS(logger_, VERBOSE) << "Level-2 workspace: node '" << node.Name()
+                                 << "' slot_id=" << req.slot_id
                                  << " size=" << req.size_bytes << " bytes";
         }
+        total_level2_workspace += node_workspace;
+        ++nodes_with_workspace;
+        LOGS(logger_, INFO) << "Level-2 workspace: node '" << node.Name()
+                            << "' (" << node.OpType() << "): " << requirements.size()
+                            << " slot(s), " << node_workspace << " bytes total";
       }
+    }
+    if (total_level2_workspace > 0) {
+      LOGS(logger_, INFO) << "Level-2 workspace estimation summary: "
+                          << nodes_with_workspace << " kernel(s) declared workspace, "
+                          << "total estimated workspace: " << total_level2_workspace << " bytes";
     }
   }
 
