@@ -4,4 +4,5 @@ __pycache__/
 
 # Downloaded packages and extracted binaries are local cache, not source.
 state/artifacts/
+extracted_ort_dlls/
 

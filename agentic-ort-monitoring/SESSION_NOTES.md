@@ -118,6 +118,29 @@ changes must be pushed only to `fork`.
 - OneDrive/Windows denied an atomic extraction-directory rename during the
   first demo run. The extractor now uses per-process staging directories and
   falls back to a validated copy when a filesystem filter blocks the rename.
+- Downloaded archives and full extraction trees remain under the ignored
+  `state/artifacts/` cache. Every DLL from the selected package is also copied
+  into the ignored, release-organized `extracted_ort_dlls/` directory. For
+  1.28.0-rc.1 this contains four DLLs across Windows x64 and ARM64.
+
+### RC lifecycle and lineage
+
+- An open RC issue does not mean the RC remains active. Lifecycle is checked
+  independently against authoritative final releases.
+- ORT v1.28.0 was published as a non-draft, non-prerelease final release on
+  2026-07-25. Therefore 1.28.0-rc.1 is `released`/`historical`, despite issue
+  29831 remaining open.
+- ORT v1.27.0 was published as a final release on 2026-06-19. Its latest
+  observed candidate was 1.27.0-rc.3, so that candidate is also historical.
+- `state/rc-lineage.json` now records:
+  - latest handled: `ORT 1.28.0-rc.1`;
+  - previous handled: `ORT 1.27.0-rc.3`;
+  - active unreleased RC: none.
+- When a new authoritative, unreleased RC appears, it becomes the active/latest
+  comparison side and 1.28.0-rc.1 becomes the previous comparison side.
+- Historical RC artifacts are blocked by default and require an explicit
+  comparison override. Materialization can reuse an already verified package
+  across decision revisions instead of downloading duplicate bytes.
 
 ## Open questions
 
@@ -143,4 +166,10 @@ changes must be pushed only to `fork`.
 - [x] Reproduce the RC issue in the fork and verify exact title/body content.
 - [x] Enforce source provenance and complete an explicitly authorized demo
   download.
+- [x] Export downloaded DLLs into `extracted_ort_dlls/`.
+- [x] Detect that ORT 1.28 is final despite its open RC issue.
+- [x] Record latest and previous handled RC versions for future comparison.
+- [ ] Generalize remaining 1.28-specific prototype assumptions after the user
+  confirms the demo is successful.
+- [ ] Run the requested cleanup pass after demo confirmation.
 

@@ -168,17 +168,96 @@ def _extract_zip(archive: Path, destination: Path) -> list[dict[str, Any]]:
     return sorted(inventory, key=lambda entry: entry["path"])
 
 
+def _export_dlls(
+    decision: dict[str, Any],
+    result: dict[str, Any],
+    dll_output_directory: Path,
+) -> dict[str, Any]:
+    release = decision.get("release") or {}
+    version = release.get("version")
+    revision = release.get("candidate_revision")
+    if not isinstance(version, str):
+        raise RuntimeError("decision release version is required to export DLLs")
+    release_name = _safe_component(f"{version}-{revision}" if revision else version)
+    release_directory = dll_output_directory / release_name
+    exports: list[dict[str, Any]] = []
+
+    for artifact in result["artifacts"]:
+        extraction_root = Path(artifact["extraction_path"])
+        package_directory = release_directory / _safe_component(artifact["package"])
+        for entry in artifact["files"]:
+            relative = PurePosixPath(entry["path"])
+            if relative.suffix.lower() != ".dll":
+                continue
+            source = extraction_root.joinpath(*relative.parts)
+            destination = package_directory.joinpath(*relative.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            exports.append(
+                {
+                    "package": artifact["package"],
+                    "source_path": relative.as_posix(),
+                    "exported_path": str(destination),
+                    "size": entry["size"],
+                    "sha256": entry["sha256"],
+                }
+            )
+
+    export_result = {
+        "release": release_name,
+        "directory": str(release_directory),
+        "dlls": sorted(exports, key=lambda entry: (entry["package"], entry["source_path"])),
+    }
+    release_directory.mkdir(parents=True, exist_ok=True)
+    (release_directory / "dll-manifest.json").write_bytes(_canonical_bytes(export_result))
+    return export_result
+
+
+def _find_reusable_artifact(
+    output_directory: Path,
+    package: str,
+    version: str,
+    requested_url: str,
+) -> dict[str, Any] | None:
+    for result_path in output_directory.glob("*/materialization.json"):
+        try:
+            prior_result = json.loads(result_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        for artifact in prior_result.get("artifacts", []):
+            if (
+                artifact.get("package") == package
+                and artifact.get("version") == version
+                and artifact.get("requested_url") == requested_url
+                and Path(artifact.get("archive_path", "")).is_file()
+                and Path(artifact.get("extraction_path", "")).is_dir()
+            ):
+                return artifact
+    return None
+
+
 def materialize(
     decision_path: Path,
     output_directory: Path,
     allowed_hosts: set[str],
     allow_demo_source: bool = False,
+    allow_non_active_release: bool = False,
+    dll_output_directory: Path | None = None,
 ) -> dict[str, Any]:
     decision_bytes = decision_path.read_bytes()
     decision = json.loads(decision_bytes)
-    if decision.get("decision", {}).get("disposition") != "actionable":
-        raise RuntimeError("only an actionable agent decision may be materialized")
-    source_trust = decision.get("decision", {}).get("source_trust")
+    decision_summary = decision.get("decision", {})
+    disposition = decision_summary.get("disposition")
+    if disposition != "actionable" and not (
+        disposition == "historical" and allow_non_active_release
+    ):
+        raise RuntimeError("only actionable decisions may be materialized by default")
+    lifecycle_status = decision_summary.get("lifecycle_status")
+    if lifecycle_status != "active" and not allow_non_active_release:
+        raise RuntimeError(
+            "non-active RC requires the explicit --allow-non-active-release override"
+        )
+    source_trust = decision_summary.get("source_trust")
     if source_trust == "demo" and not allow_demo_source:
         raise RuntimeError("demo source requires the explicit --allow-demo-source override")
     if source_trust != "authoritative" and source_trust != "demo":
@@ -191,7 +270,11 @@ def materialize(
     run_directory = output_directory / decision_sha256
     result_path = run_directory / "materialization.json"
     if result_path.exists():
-        return json.loads(result_path.read_text(encoding="utf-8"))
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        if dll_output_directory is not None:
+            result["dll_export"] = _export_dlls(decision, result, dll_output_directory)
+            result_path.write_bytes(_canonical_bytes(result))
+        return result
 
     run_directory.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
@@ -199,6 +282,15 @@ def materialize(
         url = artifact.get("download_url")
         if not isinstance(url, str):
             raise RuntimeError(f"selected artifact {artifact.get('package')!r} has no download_url")
+        reusable = _find_reusable_artifact(
+            output_directory,
+            artifact["package"],
+            artifact["version"],
+            url,
+        )
+        if reusable is not None:
+            results.append(reusable)
+            continue
         name = _safe_component(f"{artifact['package']}-{artifact['version']}")
         archive = run_directory / f"{name}.nupkg"
         sha256, size, final_url = _download(url, archive, allowed_hosts)
@@ -225,6 +317,8 @@ def materialize(
         "source_trust": source_trust,
         "artifacts": results,
     }
+    if dll_output_directory is not None:
+        result["dll_export"] = _export_dlls(decision, result, dll_output_directory)
     result_path.write_bytes(_canonical_bytes(result))
     return result
 
@@ -238,6 +332,12 @@ def parse_args() -> argparse.Namespace:
         default=Path(__file__).resolve().parents[1] / "state" / "artifacts",
     )
     parser.add_argument(
+        "--dll-output-directory",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "extracted_ort_dlls",
+        help="Directory receiving a release-organized copy of every downloaded DLL.",
+    )
+    parser.add_argument(
         "--allow-host",
         action="append",
         default=[],
@@ -246,7 +346,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-demo-source",
         action="store_true",
-        help="Allow an actionable demo fixture. Never use this in production.",
+        help="Allow a demo fixture. Never use this in production.",
+    )
+    parser.add_argument(
+        "--allow-non-active-release",
+        action="store_true",
+        help="Allow historical RC artifacts for an explicit comparison or demo.",
     )
     return parser.parse_args()
 
@@ -260,6 +365,8 @@ def main() -> int:
             args.output_directory,
             allowed_hosts,
             allow_demo_source=args.allow_demo_source,
+            allow_non_active_release=args.allow_non_active_release,
+            dll_output_directory=args.dll_output_directory,
         )
     except (json.JSONDecodeError, KeyError, OSError, RuntimeError) as error:
         print(f"error: {error}", file=sys.stderr)

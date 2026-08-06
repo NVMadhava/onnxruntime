@@ -10,9 +10,10 @@
   "decision": {
     "is_release_candidate": true,
     "source_trust": "demo",
-    "disposition": "actionable",
+    "lifecycle_status": "released",
+    "disposition": "historical",
     "confidence": "medium",
-    "reasoning": "The issue content semantically represents an ORT 1.28.0 release-candidate announcement and publishes prerelease packages. Its repository is not the configured authoritative microsoft/onnxruntime source, so this decision is actionable only under explicit demo authorization. For the assumed Windows x64 standalone EP host role, Microsoft.ML.OnnxRuntime is the applicable native base runtime package."
+    "reasoning": "The issue content semantically represents an ORT 1.28.0 release-candidate announcement and publishes prerelease packages. Its repository is not the configured authoritative microsoft/onnxruntime source, and the final v1.28.0 release now exists. Materialization therefore requires explicit demo and historical overrides. For the assumed Windows x64 standalone EP host role, Microsoft.ML.OnnxRuntime is the applicable native base runtime package."
   },
   "release": {
     "version": "1.28.0",
@@ -30,6 +31,10 @@
     {
       "source_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1",
       "summary": "NuGet identifies this as a prerelease native package containing native libraries for supported platforms."
+    },
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.28.0",
+      "summary": "The authoritative final v1.28.0 release proves that this copied RC is now historical."
     }
   ],
   "candidate_artifacts": [

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "source_snapshot_sha256": "4772d521783ed1a21a6a4d3e5af719fe335d754e5900e06397e560ebd5ef89fe",
+  "issue": {
+    "repository": "microsoft/onnxruntime",
+    "number": 29032,
+    "url": "https://github.com/microsoft/onnxruntime/issues/29032",
+    "updated_at": "2026-06-19T21:12:23Z"
+  },
+  "decision": {
+    "is_release_candidate": true,
+    "source_trust": "authoritative",
+    "lifecycle_status": "released",
+    "disposition": "historical",
+    "confidence": "high",
+    "reasoning": "The authoritative issue asks users to validate ORT 1.27.0 before release and publishes rc.3 packages. The authoritative non-prerelease v1.27.0 release was subsequently published, so this candidate is historical and retained as the previous handled RC for future comparison."
+  },
+  "release": {
+    "version": "1.27.0",
+    "candidate_revision": "rc.3"
+  },
+  "evidence": [
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/issues/29032",
+      "summary": "The issue announces ORT 1.27.0 release-candidate builds and publishes Microsoft.ML.OnnxRuntime 1.27.0-rc.3."
+    },
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.27.0",
+      "summary": "The authoritative non-prerelease v1.27.0 release was published on 2026-06-19, making rc.3 historical."
+    }
+  ],
+  "candidate_artifacts": [
+    {
+      "package": "Microsoft.ML.OnnxRuntime",
+      "version": "1.27.0-rc.3",
+      "ecosystem": "NuGet",
+      "published_url": "https://aiinfra.visualstudio.com/PublicPackages/_artifacts/feed/ORT-Nightly/NuGet/Microsoft.ML.OnnxRuntime/overview/1.27.0-rc.3",
+      "target_os": "Windows",
+      "architecture": "x64",
+      "role": "Native ORT host runtime and SDK candidate",
+      "selection_reason": "Retained as the prior native Windows host candidate for the future comparison workflow.",
+      "limitations": [
+        "The artifact has not yet been downloaded or materialized."
+      ],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29032"
+      ]
+    }
+  ],
+  "selected_artifacts": [
+    {
+      "package": "Microsoft.ML.OnnxRuntime",
+      "version": "1.27.0-rc.3",
+      "ecosystem": "NuGet",
+      "published_url": "https://aiinfra.visualstudio.com/PublicPackages/_artifacts/feed/ORT-Nightly/NuGet/Microsoft.ML.OnnxRuntime/overview/1.27.0-rc.3",
+      "target_os": "Windows",
+      "architecture": "x64",
+      "role": "Native ORT host runtime and SDK candidate",
+      "selection_reason": "Retained as the prior native Windows host candidate for the future comparison workflow.",
+      "limitations": [
+        "The artifact has not yet been downloaded or materialized."
+      ],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29032"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "The public Azure feed artifact has not yet been resolved to a stable direct download URL."
+  ]
+}

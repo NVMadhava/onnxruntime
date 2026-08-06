@@ -51,6 +51,7 @@
       "required": [
         "is_release_candidate",
         "source_trust",
+        "lifecycle_status",
         "disposition",
         "confidence",
         "reasoning"
@@ -62,8 +63,11 @@
         "source_trust": {
           "enum": ["authoritative", "demo", "untrusted"]
         },
+        "lifecycle_status": {
+          "enum": ["active", "released", "superseded", "uncertain"]
+        },
         "disposition": {
-          "enum": ["actionable", "watch", "needs_human_review", "not_rc"]
+          "enum": ["actionable", "historical", "watch", "needs_human_review", "not_rc"]
         },
         "confidence": {
           "enum": ["high", "medium", "low"]

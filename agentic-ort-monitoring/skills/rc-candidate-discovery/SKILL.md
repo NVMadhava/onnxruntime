@@ -71,9 +71,31 @@ semantic decision from that snapshot.
    - `low` when evidence is incomplete or conflicting.
 9. Set disposition:
    - `actionable` only when safe to create a manifest and download;
+   - `historical` when a final release or newer RC has made the candidate
+     inactive but its artifacts remain useful for an explicit comparison;
    - `watch` when publication is expected but no applicable build is ready;
    - `needs_human_review` for material ambiguity;
    - `not_rc` when the issue is not an RC announcement.
+
+## Release lifecycle
+
+Never use issue open/closed state as the RC lifecycle. Independently check the
+authoritative `microsoft/onnxruntime` releases for the final `v<version>` tag:
+
+- a published, non-draft, non-prerelease final release means `released`;
+- a newer RC for the same release line means the older RC is `superseded`;
+- use `active` only when positive RC evidence exists and no final or
+  superseding evidence exists;
+- use `uncertain` when authoritative checks are incomplete or conflicting.
+
+Run `tools/check_release_status.py` to collect deterministic release evidence,
+then let the agent assign lifecycle status. Absence of a GitHub release alone
+does not prove that an RC is active.
+
+Maintain `state/rc-lineage.json` with the two most recent distinct RC versions
+the agent has handled. When a new active RC appears, shift the prior latest
+entry to previous so the pair is immediately available to the comparison
+workflow.
 
 ## Evidence requirements
 
@@ -102,9 +124,10 @@ For each selected artifact, include:
 The downloader adds final URL, byte size, SHA-256, extracted file inventory,
 and download timestamp. The agent must not invent these values.
 
-An `authoritative` decision may be materialized normally. A `demo` decision
-requires an explicit deterministic-tool override. Never materialize an
-`untrusted` decision.
+An active `authoritative` decision may be materialized normally. A `demo`
+decision requires an explicit deterministic-tool override. A released or
+superseded RC requires a separate historical-comparison override. Never
+materialize an `untrusted` decision.
 
 ## Idempotency
 

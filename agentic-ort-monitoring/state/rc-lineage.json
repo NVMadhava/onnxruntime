@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "authoritative_repository": "microsoft/onnxruntime",
+  "active_unreleased_rc": null,
+  "latest_handled": {
+    "version": "1.28.0",
+    "candidate_revision": "rc.1",
+    "display_name": "ORT 1.28.0-rc.1",
+    "lifecycle_status": "released",
+    "issue_url": "https://github.com/microsoft/onnxruntime/issues/29831",
+    "final_release_url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.28.0",
+    "decision_path": "state/decisions/microsoft__onnxruntime__29831/rc-1.28.0-rc.1.json"
+  },
+  "previous_handled": {
+    "version": "1.27.0",
+    "candidate_revision": "rc.3",
+    "display_name": "ORT 1.27.0-rc.3",
+    "lifecycle_status": "released",
+    "issue_url": "https://github.com/microsoft/onnxruntime/issues/29032",
+    "final_release_url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.27.0",
+    "decision_path": "state/decisions/microsoft__onnxruntime__29032/rc-1.27.0-rc.3.json"
+  },
+  "next_comparison_rule": "When a new authoritative active RC is handled, compare it with latest_handled, then shift latest_handled to previous_handled.",
+  "next_comparison_pair": null
+}

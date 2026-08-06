@@ -1,0 +1,19 @@
+{
+  "candidate_revision": "rc.3",
+  "decision_path": "state\\decisions\\microsoft__onnxruntime__29032\\rc-1.27.0-rc.3.json",
+  "decision_sha256": "19a0cc8a221d8ad478659bbba29bd32bd9454b2641d4a03ee6665bdfad761220",
+  "evidence": {
+    "draft": false,
+    "found": true,
+    "prerelease": false,
+    "published_at": "2026-06-19T21:11:07Z",
+    "tag": "v1.27.0",
+    "target_commitish": "rel-1.27.0",
+    "url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.27.0"
+  },
+  "interpretation_limit": "A final release proves the RC is no longer active. Absence of a final GitHub release does not by itself prove that an RC is active.",
+  "observed_status": "released",
+  "release_repository": "microsoft/onnxruntime",
+  "schema_version": 1,
+  "version": "1.27.0"
+}

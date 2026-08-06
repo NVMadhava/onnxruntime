@@ -1,0 +1,19 @@
+{
+  "candidate_revision": "rc.1",
+  "decision_path": "state\\decisions\\microsoft__onnxruntime__29831\\rc-1.28.0-rc.1.json",
+  "decision_sha256": "d043e50fc7ff426d9480adbc03e60ec225fd818933ed5256bb3d14ef4e8cef93",
+  "evidence": {
+    "draft": false,
+    "found": true,
+    "prerelease": false,
+    "published_at": "2026-07-25T05:27:07Z",
+    "tag": "v1.28.0",
+    "target_commitish": "rel-1.28.0",
+    "url": "https://github.com/microsoft/onnxruntime/releases/tag/v1.28.0"
+  },
+  "interpretation_limit": "A final release proves the RC is no longer active. Absence of a final GitHub release does not by itself prove that an RC is active.",
+  "observed_status": "released",
+  "release_repository": "microsoft/onnxruntime",
+  "schema_version": 1,
+  "version": "1.28.0"
+}
