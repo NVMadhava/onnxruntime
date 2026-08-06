@@ -25,6 +25,11 @@ The prototype is temporarily isolated under `agentic-ort-monitoring/` in the
 local ONNX Runtime checkout. It should move to `winai/trt-rtx-ep-abi` before EP
 build, GitLab, or implementation workflows are added.
 
+The prototype is published to the `agentic-ort-monitoring` branch of
+`https://github.com/NVMadhava/onnxruntime`. In this checkout, Git remote `fork`
+points to that repository and `origin` remains the Microsoft upstream. Agent
+changes must be pushed only to `fork`.
+
 ## Decisions
 
 - RC recognition and package selection are semantic agent decisions, not
