@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
-  "source_snapshot_sha256": "3fde04e83b437347056645e08dd6076273fbef70974df2e23f1427ad0cc90a41",
+  "source_snapshot_sha256": "36b96df5866fddb9736711773b2e02282dc6e526dd072cddbc8c2e59d299e536",
   "issue": {
-    "repository": "microsoft/onnxruntime",
-    "number": 29831,
-    "url": "https://github.com/microsoft/onnxruntime/issues/29831",
-    "updated_at": "2026-07-26T02:27:07Z"
+    "repository": "NVMadhava/onnxruntime",
+    "number": 2,
+    "url": "https://github.com/NVMadhava/onnxruntime/issues/2",
+    "updated_at": "2026-08-06T06:04:01Z"
   },
   "decision": {
     "is_release_candidate": true,
-    "source_trust": "authoritative",
+    "source_trust": "demo",
     "disposition": "actionable",
     "confidence": "medium",
-    "reasoning": "The issue asks users to validate ORT 1.28.0 before release, identifies a release branch and manager, and publishes prerelease packages. For a Windows x64 standalone EP host, Microsoft.ML.OnnxRuntime is the applicable native base runtime package. The managed package is only the C# binding, while the GPU packages bundle in-tree CUDA/TensorRT providers and are not automatically required merely because the external EP targets NVIDIA hardware. Confidence remains medium until the target EP repository confirms its ONNXRUNTIME_ROOT package contract."
+    "reasoning": "The issue content semantically represents an ORT 1.28.0 release-candidate announcement and publishes prerelease packages. Its repository is not the configured authoritative microsoft/onnxruntime source, so this decision is actionable only under explicit demo authorization. For the assumed Windows x64 standalone EP host role, Microsoft.ML.OnnxRuntime is the applicable native base runtime package."
   },
   "release": {
     "version": "1.28.0",
@@ -20,20 +20,16 @@
   },
   "evidence": [
     {
-      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831",
-      "summary": "The issue says ORT 1.28.0 is pending validation and that release-candidate builds are available for testing."
+      "source_url": "https://github.com/NVMadhava/onnxruntime/issues/2",
+      "summary": "The copied body asks users to validate ORT 1.28.0 before release and publishes release-candidate packages."
     },
     {
-      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831",
-      "summary": "The issue publishes Microsoft.ML.OnnxRuntime 1.28.0-rc.1 under NuGet CPU packages."
+      "source_url": "https://github.com/NVMadhava/onnxruntime/issues/2",
+      "summary": "The body links Microsoft.ML.OnnxRuntime 1.28.0-rc.1 under NuGet CPU packages."
     },
     {
       "source_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1",
-      "summary": "NuGet identifies this as a prerelease native package containing native libraries for supported platforms and the CPU execution provider."
-    },
-    {
-      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831#issuecomment-5081618586",
-      "summary": "The release manager reports incomplete onnxruntime-gpu publication on PyPI due to quota; that limitation does not apply to the selected NuGet CPU package."
+      "summary": "NuGet identifies this as a prerelease native package containing native libraries for supported platforms."
     }
   ],
   "candidate_artifacts": [
@@ -48,10 +44,11 @@
       "role": "Native ORT host runtime and SDK candidate",
       "selection_reason": "Provides the base native runtime needed to load a standalone execution provider.",
       "limitations": [
+        "This issue is a demo copy and is not an authoritative upstream announcement.",
         "The target EP repository package-layout contract has not yet been inspected."
       ],
       "evidence_urls": [
-        "https://github.com/microsoft/onnxruntime/issues/29831",
+        "https://github.com/NVMadhava/onnxruntime/issues/2",
         "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1"
       ]
     },
@@ -63,10 +60,10 @@
       "target_os": null,
       "architecture": null,
       "role": "Managed C# bindings",
-      "selection_reason": "Not selected because the planned EP ABI validation is native C/C++ rather than a C# binding test.",
+      "selection_reason": "Not selected because the planned EP ABI validation is native C/C++.",
       "limitations": [],
       "evidence_urls": [
-        "https://github.com/microsoft/onnxruntime/issues/29831"
+        "https://github.com/NVMadhava/onnxruntime/issues/2"
       ]
     },
     {
@@ -77,10 +74,10 @@
       "target_os": "Windows",
       "architecture": "x64",
       "role": "Native in-tree CUDA and TensorRT provider payload",
-      "selection_reason": "Not selected because GPU hardware use does not establish that an external plugin EP requires ORT's bundled CUDA/TensorRT provider package.",
+      "selection_reason": "Not selected because an external GPU EP does not automatically require bundled in-tree GPU providers.",
       "limitations": [],
       "evidence_urls": [
-        "https://github.com/microsoft/onnxruntime/issues/29831"
+        "https://github.com/NVMadhava/onnxruntime/issues/2"
       ]
     }
   ],
@@ -96,16 +93,17 @@
       "role": "Native ORT host runtime and SDK candidate",
       "selection_reason": "Provides the base native runtime needed to load a standalone execution provider.",
       "limitations": [
+        "This issue is a demo copy and is not an authoritative upstream announcement.",
         "The target EP repository package-layout contract has not yet been inspected."
       ],
       "evidence_urls": [
-        "https://github.com/microsoft/onnxruntime/issues/29831",
+        "https://github.com/NVMadhava/onnxruntime/issues/2",
         "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1"
       ]
     }
   ],
   "ambiguities": [
-    "The target EP repository is not present, so its exact ONNXRUNTIME_ROOT package and directory expectations remain unverified.",
-    "The issue publishes several Python and CUDA-specific packages; they were read but are not candidates for the current native Windows host-runtime role."
+    "The copied issue has no original comments, labels, author, timestamps, reactions, or edit history.",
+    "The target EP repository is not present, so its exact ONNXRUNTIME_ROOT layout remains unverified."
   ]
 }

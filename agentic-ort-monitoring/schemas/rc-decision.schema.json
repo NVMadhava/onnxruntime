@@ -48,10 +48,19 @@
     "decision": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["is_release_candidate", "disposition", "confidence", "reasoning"],
+      "required": [
+        "is_release_candidate",
+        "source_trust",
+        "disposition",
+        "confidence",
+        "reasoning"
+      ],
       "properties": {
         "is_release_candidate": {
           "type": "boolean"
+        },
+        "source_trust": {
+          "enum": ["authoritative", "demo", "untrusted"]
         },
         "disposition": {
           "enum": ["actionable", "watch", "needs_human_review", "not_rc"]

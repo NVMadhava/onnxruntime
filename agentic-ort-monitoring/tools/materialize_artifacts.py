@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import stat
@@ -116,7 +117,7 @@ def _validated_member_path(member: zipfile.ZipInfo) -> PurePosixPath:
 
 def _extract_zip(archive: Path, destination: Path) -> list[dict[str, Any]]:
     inventory: list[dict[str, Any]] = []
-    temporary = destination.with_name(destination.name + ".partial")
+    temporary = destination.with_name(f"{destination.name}.partial-{os.getpid()}")
     if temporary.exists():
         shutil.rmtree(temporary)
     temporary.mkdir(parents=True)
@@ -156,15 +157,32 @@ def _extract_zip(archive: Path, destination: Path) -> list[dict[str, Any]]:
 
     if destination.exists():
         shutil.rmtree(destination)
-    temporary.replace(destination)
+    try:
+        temporary.replace(destination)
+    except PermissionError:
+        # OneDrive and antivirus filters can briefly hold a directory handle on
+        # Windows and reject an otherwise atomic directory rename. Preserve the
+        # validated extraction by copying it to the final location instead.
+        shutil.copytree(temporary, destination)
+        shutil.rmtree(temporary, ignore_errors=True)
     return sorted(inventory, key=lambda entry: entry["path"])
 
 
-def materialize(decision_path: Path, output_directory: Path, allowed_hosts: set[str]) -> dict[str, Any]:
+def materialize(
+    decision_path: Path,
+    output_directory: Path,
+    allowed_hosts: set[str],
+    allow_demo_source: bool = False,
+) -> dict[str, Any]:
     decision_bytes = decision_path.read_bytes()
     decision = json.loads(decision_bytes)
     if decision.get("decision", {}).get("disposition") != "actionable":
         raise RuntimeError("only an actionable agent decision may be materialized")
+    source_trust = decision.get("decision", {}).get("source_trust")
+    if source_trust == "demo" and not allow_demo_source:
+        raise RuntimeError("demo source requires the explicit --allow-demo-source override")
+    if source_trust != "authoritative" and source_trust != "demo":
+        raise RuntimeError("only authoritative or explicitly allowed demo sources may be materialized")
     selected = decision.get("selected_artifacts")
     if not isinstance(selected, list) or not selected:
         raise RuntimeError("agent decision has no selected artifacts")
@@ -204,6 +222,7 @@ def materialize(decision_path: Path, output_directory: Path, allowed_hosts: set[
         "schema_version": 1,
         "decision_path": str(decision_path),
         "decision_sha256": decision_sha256,
+        "source_trust": source_trust,
         "artifacts": results,
     }
     result_path.write_bytes(_canonical_bytes(result))
@@ -224,6 +243,11 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Additional exact HTTPS host allowed for downloads.",
     )
+    parser.add_argument(
+        "--allow-demo-source",
+        action="store_true",
+        help="Allow an actionable demo fixture. Never use this in production.",
+    )
     return parser.parse_args()
 
 
@@ -231,7 +255,12 @@ def main() -> int:
     args = parse_args()
     allowed_hosts = DEFAULT_ALLOWED_HOSTS | {host.lower() for host in args.allow_host}
     try:
-        result = materialize(args.decision, args.output_directory, allowed_hosts)
+        result = materialize(
+            args.decision,
+            args.output_directory,
+            allowed_hosts,
+            allow_demo_source=args.allow_demo_source,
+        )
     except (json.JSONDecodeError, KeyError, OSError, RuntimeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

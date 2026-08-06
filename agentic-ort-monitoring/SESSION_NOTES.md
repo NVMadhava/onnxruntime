@@ -96,6 +96,29 @@ changes must be pushed only to `fork`.
 - An unchanged rerun produced the same source snapshot with `created: false`
   and reused the same materialization decision and archive hashes.
 
+### Fork issue demo
+
+- Created `NVMadhava/onnxruntime#2` with the exact current title and body from
+  upstream issue 29831. Title and body comparisons both passed; each body has
+  SHA-256
+  `531422d59fd6e60e1ac84bf08439b67ec35df4528aa6654fadb0340353076919`.
+- GitHub cannot copy issue number, author, timestamps, reactions, edit history,
+  or comment authors between repositories. The demo intentionally does not
+  impersonate upstream commenters.
+- The local demo snapshot SHA-256 is
+  `36b96df5866fddb9736711773b2e02282dc6e526dd072cddbc8c2e59d299e536`.
+- Provenance is a separate decision from semantic content. Production accepts
+  RC announcements only from the configured authoritative repository,
+  currently `microsoft/onnxruntime`. A copied issue is marked `demo` and is
+  blocked unless the deterministic downloader receives an explicit
+  `--allow-demo-source` override.
+- With the demo override, the agent-selected NuGet package downloaded and
+  extracted successfully. Its archive and Windows x64 DLL hashes exactly match
+  the authoritative-issue run.
+- OneDrive/Windows denied an atomic extraction-directory rename during the
+  first demo run. The extractor now uses per-process staging directories and
+  falls back to a validated copy when a filesystem filter blocks the rename.
+
 ## Open questions
 
 - Confirm whether `winai/trt-rtx-ep-abi` expects the CPU
@@ -117,4 +140,7 @@ changes must be pushed only to `fork`.
 - [x] Produce and validate the first semantic decision and package manifest.
 - [x] Download and inspect the selected Windows package.
 - [x] Verify an unchanged rerun is idempotent.
+- [x] Reproduce the RC issue in the fork and verify exact title/body content.
+- [x] Enforce source provenance and complete an explicitly authorized demo
+  download.
 

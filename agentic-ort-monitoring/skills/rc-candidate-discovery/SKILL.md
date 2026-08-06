@@ -10,6 +10,8 @@ description: Semantically identifies ONNX Runtime release-candidate announcement
 The agent decides:
 
 - whether an issue announces a usable ORT release candidate;
+- whether the source repository is authoritative, explicitly authorized for a
+  demo, or untrusted;
 - the inferred release and candidate revision;
 - which artifacts are applicable to the target EP scenario;
 - whether evidence is sufficient or requires human review.
@@ -45,24 +47,29 @@ semantic decision from that snapshot.
    installation instructions. These are examples, not required strings.
 2. Distinguish an official announcement from a user question, bug report,
    downstream test request, or discussion that merely mentions an RC.
-3. Infer the release version and RC revision from mutually supporting
+3. Verify provenance independently of issue content. Production ORT RC
+   announcements must come from the configured authoritative repository,
+   currently `microsoft/onnxruntime`. Copied text and valid package links do
+   not make another repository authoritative. Mark a copied fixture as `demo`
+   only when the caller explicitly authorizes demo mode.
+4. Infer the release version and RC revision from mutually supporting
    evidence. Record conflicts instead of choosing silently.
-4. Inventory every published artifact without selecting by section name.
+5. Inventory every published artifact without selecting by section name.
    Understand package ecosystem, platform, architecture, provider, version,
    and role from surrounding prose and linked metadata.
-5. Select only artifacts needed by the target EP validation scenario. Do not
+6. Select only artifacts needed by the target EP validation scenario. Do not
    infer that a GPU-named host package is required merely because the EP uses
    a GPU.
-6. Read comments for superseded packages, known publication failures,
+7. Read comments for superseded packages, known publication failures,
    corrections, or limitations. A later correction takes precedence, but both
    sources remain in the evidence record.
-7. Assign:
+8. Assign:
    - `high` confidence when intent, version, artifact identity, and
      applicability are supported without material conflict;
    - `medium` when the likely decision is clear but package role or revision
      has unresolved uncertainty;
    - `low` when evidence is incomplete or conflicting.
-8. Set disposition:
+9. Set disposition:
    - `actionable` only when safe to create a manifest and download;
    - `watch` when publication is expected but no applicable build is ready;
    - `needs_human_review` for material ambiguity;
@@ -94,6 +101,10 @@ For each selected artifact, include:
 
 The downloader adds final URL, byte size, SHA-256, extracted file inventory,
 and download timestamp. The agent must not invent these values.
+
+An `authoritative` decision may be materialized normally. A `demo` decision
+requires an explicit deterministic-tool override. Never materialize an
+`untrusted` decision.
 
 ## Idempotency
 
