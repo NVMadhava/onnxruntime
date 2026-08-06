@@ -1,6 +1,6 @@
 {
   "candidate_revision": "rc.1",
-  "decision_path": "state\\decisions\\microsoft__onnxruntime__29831\\rc-1.28.0-rc.1.json",
+  "decision_path": "state/decisions/microsoft__onnxruntime__29831/rc-1.28.0-rc.1.json",
   "decision_sha256": "d043e50fc7ff426d9480adbc03e60ec225fd818933ed5256bb3d14ef4e8cef93",
   "evidence": {
     "draft": false,

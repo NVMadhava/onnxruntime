@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/trt-rtx-agent/rc-decision.schema.json",
+  "$id": "https://raw.githubusercontent.com/NVMadhava/onnxruntime/agentic-ort-monitoring/agentic-ort-monitoring/schemas/rc-decision.schema.json",
   "title": "ORT release-candidate semantic decision",
   "type": "object",
   "additionalProperties": false,
@@ -117,6 +117,37 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "disposition": {
+                "const": "actionable"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "lifecycle_status": {
+                "const": "active"
+              }
+            }
+          },
+          "selected_artifacts": {
+            "items": {
+              "required": ["download_url"]
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {
       "type": "string",

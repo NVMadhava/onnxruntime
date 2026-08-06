@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,13 +14,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from common import (
+    DEFAULT_CONFIG_PATH,
+    canonical_bytes,
+    decision_sha256,
+    load_config,
+    project_relative,
+)
+
 
 GITHUB_API = "https://api.github.com"
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-
-
-def _canonical_bytes(value: Any) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def _request_release(repository: str, tag: str) -> dict[str, Any] | None:
@@ -81,8 +84,8 @@ def collect_status(decision_path: Path, release_repository: str) -> dict[str, An
 
     return {
         "schema_version": 1,
-        "decision_path": str(decision_path),
-        "decision_sha256": hashlib.sha256(decision_bytes).hexdigest(),
+        "decision_path": project_relative(decision_path),
+        "decision_sha256": decision_sha256(decision_path),
         "release_repository": release_repository,
         "version": version,
         "candidate_revision": release.get("candidate_revision"),
@@ -99,20 +102,28 @@ def save_status(status: dict[str, Any], state_directory: Path) -> Path:
     release_name = re.sub(r"[^A-Za-z0-9_.-]", "_", status["version"])
     destination = state_directory / "release-status" / f"{release_name}.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(_canonical_bytes(status))
+    content = canonical_bytes(status)
+    if not destination.exists() or destination.read_bytes() != content:
+        destination.write_bytes(content)
     return destination
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--decision", required=True, type=Path)
-    parser.add_argument("--release-repository", default="microsoft/onnxruntime")
+    parser.add_argument("--release-repository")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument(
         "--state-directory",
         type=Path,
         default=Path(__file__).resolve().parents[1] / "state",
     )
     args = parser.parse_args()
+    try:
+        config = load_config(args.config)
+    except (json.JSONDecodeError, OSError, RuntimeError) as error:
+        parser.error(str(error))
+    args.release_repository = args.release_repository or config["authoritative_repository"]
     if not REPOSITORY_PATTERN.fullmatch(args.release_repository):
         parser.error("--release-repository must have owner/name form")
     return args

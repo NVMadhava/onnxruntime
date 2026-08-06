@@ -17,19 +17,21 @@ import urllib.parse
 import urllib.request
 import zipfile
 
+from common import (
+    DEFAULT_CONFIG_PATH,
+    PROJECT_ROOT,
+    canonical_bytes,
+    decision_sha256,
+    load_config,
+    project_relative,
+    semantic_manifest_sha256,
+    sha256_file,
+)
+from validate_state import validate_decision_file
 
-DEFAULT_ALLOWED_HOSTS = {
-    "api.nuget.org",
-    "globalcdn.nuget.org",
-    "www.nuget.org",
-}
 MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES = 50_000
-
-
-def _canonical_bytes(value: Any) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def _validate_url(url: str, allowed_hosts: set[str]) -> None:
@@ -209,7 +211,7 @@ def _export_dlls(
         "dlls": sorted(exports, key=lambda entry: (entry["package"], entry["source_path"])),
     }
     release_directory.mkdir(parents=True, exist_ok=True)
-    (release_directory / "dll-manifest.json").write_bytes(_canonical_bytes(export_result))
+    (release_directory / "dll-manifest.json").write_bytes(canonical_bytes(export_result))
     return export_result
 
 
@@ -225,12 +227,14 @@ def _find_reusable_artifact(
         except (json.JSONDecodeError, OSError):
             continue
         for artifact in prior_result.get("artifacts", []):
+            archive_path = Path(artifact.get("archive_path", ""))
             if (
                 artifact.get("package") == package
                 and artifact.get("version") == version
                 and artifact.get("requested_url") == requested_url
-                and Path(artifact.get("archive_path", "")).is_file()
+                and archive_path.is_file()
                 and Path(artifact.get("extraction_path", "")).is_dir()
+                and sha256_file(archive_path) == artifact.get("archive_sha256")
             ):
                 return artifact
     return None
@@ -266,14 +270,17 @@ def materialize(
     if not isinstance(selected, list) or not selected:
         raise RuntimeError("agent decision has no selected artifacts")
 
-    decision_sha256 = hashlib.sha256(decision_bytes).hexdigest()
-    run_directory = output_directory / decision_sha256
+    decision_digest = decision_sha256(decision_path)
+    manifest_sha256 = semantic_manifest_sha256(decision)
+    run_directory = output_directory / manifest_sha256
     result_path = run_directory / "materialization.json"
     if result_path.exists():
         result = json.loads(result_path.read_text(encoding="utf-8"))
         if dll_output_directory is not None:
-            result["dll_export"] = _export_dlls(decision, result, dll_output_directory)
-            result_path.write_bytes(_canonical_bytes(result))
+            result = {
+                **result,
+                "dll_export": _export_dlls(decision, result, dll_output_directory),
+            }
         return result
 
     run_directory.mkdir(parents=True, exist_ok=True)
@@ -312,20 +319,22 @@ def materialize(
 
     result = {
         "schema_version": 1,
-        "decision_path": str(decision_path),
-        "decision_sha256": decision_sha256,
+        "decision_path": project_relative(decision_path),
+        "decision_sha256": decision_digest,
+        "manifest_sha256": manifest_sha256,
         "source_trust": source_trust,
         "artifacts": results,
     }
     if dll_output_directory is not None:
         result["dll_export"] = _export_dlls(decision, result, dll_output_directory)
-    result_path.write_bytes(_canonical_bytes(result))
+    result_path.write_bytes(canonical_bytes(result))
     return result
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--decision", required=True, type=Path)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument(
         "--output-directory",
         type=Path,
@@ -336,12 +345,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(__file__).resolve().parents[1] / "extracted_ort_dlls",
         help="Directory receiving a release-organized copy of every downloaded DLL.",
-    )
-    parser.add_argument(
-        "--allow-host",
-        action="append",
-        default=[],
-        help="Additional exact HTTPS host allowed for downloads.",
     )
     parser.add_argument(
         "--allow-demo-source",
@@ -358,8 +361,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    allowed_hosts = DEFAULT_ALLOWED_HOSTS | {host.lower() for host in args.allow_host}
     try:
+        config = load_config(args.config)
+        validation_errors = validate_decision_file(args.decision, PROJECT_ROOT / "state")
+        if validation_errors:
+            raise RuntimeError("decision validation failed: " + "; ".join(validation_errors))
+        allowed_hosts = {host.lower() for host in config["allowed_download_hosts"]}
         result = materialize(
             args.decision,
             args.output_directory,

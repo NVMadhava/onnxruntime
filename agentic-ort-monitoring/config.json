@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "authoritative_repository": "microsoft/onnxruntime",
+  "allowed_download_hosts": [
+    "api.nuget.org",
+    "globalcdn.nuget.org",
+    "www.nuget.org"
+  ],
+  "default_target": {
+    "os": "Windows",
+    "architecture": "x64"
+  },
+  "demo_complete": true
+}

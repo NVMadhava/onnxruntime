@@ -15,6 +15,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from common import DEFAULT_CONFIG_PATH, canonical_bytes, load_config
+
 
 GITHUB_API = "https://api.github.com"
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -98,12 +100,8 @@ def fetch_snapshot(repository: str, issue_number: int) -> dict[str, Any]:
     }
 
 
-def _canonical_bytes(value: Any) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
-
-
 def save_snapshot(snapshot: dict[str, Any], state_directory: Path) -> tuple[Path, str, bool]:
-    content = _canonical_bytes(snapshot)
+    content = canonical_bytes(snapshot)
     digest = hashlib.sha256(content).hexdigest()
     issue_directory = state_directory / "sources" / (
         f"{snapshot['repository'].replace('/', '__')}__{snapshot['number']}"
@@ -120,7 +118,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch and content-address a complete public GitHub issue snapshot."
     )
-    parser.add_argument("--repository", default="microsoft/onnxruntime")
+    parser.add_argument("--repository")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--issue", required=True, type=int)
     parser.add_argument(
         "--state-directory",
@@ -128,6 +127,11 @@ def parse_args() -> argparse.Namespace:
         default=Path(__file__).resolve().parents[1] / "state",
     )
     args = parser.parse_args()
+    try:
+        config = load_config(args.config)
+    except (json.JSONDecodeError, OSError, RuntimeError) as error:
+        parser.error(str(error))
+    args.repository = args.repository or config["authoritative_repository"]
     if not REPOSITORY_PATTERN.fullmatch(args.repository):
         parser.error("--repository must have owner/name form")
     if args.issue < 1:
