@@ -41,5 +41,6 @@ notes or state fixtures, not in the reusable skill.
    evidence; the agent assigns lifecycle status.
 4. `tools/validate_state.py` checks decision/source/status/lineage consistency.
 5. `tools/materialize_artifacts.py` downloads an approved artifact, verifies
-   and safely extracts it, and exports DLLs to `extracted_ort_dlls/`.
+   and safely extracts it, then exports an `include/` + `lib/` SDK layout under
+   `extracted_ort_dlls/`.
 

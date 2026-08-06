@@ -73,7 +73,7 @@ Do not duplicate these values in tools.
 3. `tools/check_release_status.py` collects final-release evidence.
 4. `tools/validate_state.py` verifies decisions, snapshots, status, and lineage.
 5. `tools/materialize_artifacts.py` downloads, verifies, safely extracts, and
-   exports DLLs.
+   exports an `ONNXRUNTIME_ROOT`-style `include/` + `lib/` layout.
 
 ## Successful demo evidence
 
@@ -107,10 +107,20 @@ Do not duplicate these values in tools.
 ### Filesystem behavior
 
 - Full package caches are under ignored `state/artifacts/`.
-- DLL copies are under ignored
-  `extracted_ort_dlls/<version>-<candidate>/`.
+- Consumable SDK files are under ignored
+  `extracted_ort_dlls/<version>-<candidate>/include/` and `lib/`.
+- `include/` comes from NuGet's `build/native/include/`.
+- `lib/` contains all files from the selected architecture's
+  `runtimes/win-<arch>/native/`, including runtime DLLs and import libraries.
+- The verified 1.28.0-rc.1 layout contains 15 headers and four x64 native
+  files: `onnxruntime.dll`, `onnxruntime.lib`,
+  `onnxruntime_providers_shared.dll`, and
+  `onnxruntime_providers_shared.lib`.
 - OneDrive/antivirus filters denied an atomic extraction-directory rename once;
   per-process staging plus validated copy fallback resolved it.
+- NuGet-extracted paths may also carry Windows read-only attributes. SDK layout
+  replacement clears those attributes with bounded retries before removing a
+  stale export.
 
 ## RC lifecycle and comparison lineage
 
@@ -137,8 +147,8 @@ the prior `latest_handled` becomes the previous side.
 - A GPU-targeting external EP does not automatically require ORT's bundled GPU
   provider package. Package choice depends on the standalone host contract.
 - Public issue comments may correct package availability and must be included.
-- NuGet packages can contain multiple architectures, so DLL export preserves
-  their archive-relative paths.
+- NuGet packages can contain multiple architectures. SDK export selects the
+  architecture recorded in the semantic artifact decision.
 
 ## Post-demo cleanup results
 
@@ -176,7 +186,7 @@ the prior `latest_handled` becomes the previous side.
 
 - [x] Semantic RC discovery from complete issue context.
 - [x] Source provenance and demo override enforcement.
-- [x] Safe NuGet download, extraction, checksum inventory, and DLL export.
+- [x] Safe NuGet download, extraction, checksum inventory, and SDK export.
 - [x] Final-release lifecycle detection independent of issue state.
 - [x] Latest/previous RC lineage for future comparison.
 - [x] Successful end-to-end fork issue demo.
@@ -184,5 +194,6 @@ the prior `latest_handled` becomes the previous side.
 - [x] Make skill/session-note maintenance mandatory.
 - [x] Complete state validation and semantic cache-identity cleanup.
 - [x] Complete the requested post-demo documentation and prompt cleanup.
+- [x] Export the selected ORT package as `include/` and `lib/` folders.
 - [ ] Implement RC comparison after cleanup validation.
 

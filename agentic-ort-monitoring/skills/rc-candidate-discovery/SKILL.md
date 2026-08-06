@@ -147,8 +147,13 @@ The tool:
 - hashes archives and extracted files;
 - reuses only locally revalidated cached artifacts;
 - writes full artifacts under ignored `state/artifacts/`;
-- copies all DLLs from the selected package into ignored
-  `extracted_ort_dlls/<version>-<revision>/`.
+- creates an ignored SDK root at
+  `extracted_ort_dlls/<version>-<revision>/`;
+- copies `build/native/include/` into its `include/` folder;
+- copies every native runtime/import-library file for the selected Windows
+  architecture into its `lib/` folder;
+- replaces stale derived layouts using bounded Windows read-only/OneDrive
+  cleanup handling.
 
 ## Evidence and safety
 
@@ -185,6 +190,7 @@ platform/architecture payloads. Managed and provider-specific packages serve
 different roles.
 
 Always inspect the selected archive and target repository contract. Preserve
-architecture paths when exporting DLLs, and do not treat a multi-platform
-archive as target-specific.
+the selected architecture when creating the SDK layout, and do not treat a
+multi-platform archive as target-specific. `lib/` should contain the runtime
+DLLs and import libraries needed to link and run against that ORT build.
 

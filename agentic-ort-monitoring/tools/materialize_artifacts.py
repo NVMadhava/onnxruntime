@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import sys
+import time
 from typing import Any
 import urllib.error
 import urllib.parse
@@ -170,36 +171,93 @@ def _extract_zip(archive: Path, destination: Path) -> list[dict[str, Any]]:
     return sorted(inventory, key=lambda entry: entry["path"])
 
 
-def _export_dlls(
+def _has_prefix(path: PurePosixPath, prefix: PurePosixPath) -> bool:
+    return path.parts[: len(prefix.parts)] == prefix.parts
+
+
+def _copy_export(source: Path, destination: Path, expected_sha256: str) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if sha256_file(destination) != expected_sha256:
+            raise RuntimeError(f"conflicting SDK export file: {destination}")
+        return
+    shutil.copy2(source, destination)
+
+
+def _remove_tree_with_retries(path: Path) -> None:
+    if not path.exists():
+        return
+
+    def remove_readonly(function: Any, blocked_path: str, _: Any) -> None:
+        os.chmod(blocked_path, stat.S_IWRITE)
+        function(blocked_path)
+
+    for attempt in range(6):
+        try:
+            shutil.rmtree(path, onerror=remove_readonly)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(0.5 * (attempt + 1))
+
+
+def _export_sdk_layout(
     decision: dict[str, Any],
     result: dict[str, Any],
-    dll_output_directory: Path,
+    sdk_output_directory: Path,
 ) -> dict[str, Any]:
     release = decision.get("release") or {}
     version = release.get("version")
     revision = release.get("candidate_revision")
     if not isinstance(version, str):
-        raise RuntimeError("decision release version is required to export DLLs")
+        raise RuntimeError("decision release version is required to export the SDK")
     release_name = _safe_component(f"{version}-{revision}" if revision else version)
-    release_directory = dll_output_directory / release_name
+    release_directory = sdk_output_directory / release_name
+    temporary = sdk_output_directory / f"{release_name}.partial-{os.getpid()}"
+    _remove_tree_with_retries(temporary)
+    include_directory = temporary / "include"
+    library_directory = temporary / "lib"
     exports: list[dict[str, Any]] = []
+    selected_by_identity = {
+        (artifact["package"], artifact["version"]): artifact
+        for artifact in decision.get("selected_artifacts", [])
+    }
 
     for artifact in result["artifacts"]:
+        selection = selected_by_identity.get((artifact["package"], artifact["version"]))
+        if selection is None:
+            raise RuntimeError(f"materialized artifact has no matching selection: {artifact['package']}")
+        target_os = str(selection.get("target_os") or "").lower()
+        architecture = str(selection.get("architecture") or "").lower()
+        if target_os != "windows" or not architecture:
+            raise RuntimeError(
+                f"SDK layout export currently requires a Windows architecture: {artifact['package']}"
+            )
+
         extraction_root = Path(artifact["extraction_path"])
-        package_directory = release_directory / _safe_component(artifact["package"])
+        header_prefix = PurePosixPath("build/native/include")
+        runtime_prefix = PurePosixPath(f"runtimes/win-{architecture}/native")
         for entry in artifact["files"]:
             relative = PurePosixPath(entry["path"])
-            if relative.suffix.lower() != ".dll":
+            if _has_prefix(relative, header_prefix):
+                export_relative = PurePosixPath(*relative.parts[len(header_prefix.parts) :])
+                destination = include_directory.joinpath(*export_relative.parts)
+                category = "include"
+            elif _has_prefix(relative, runtime_prefix):
+                export_relative = PurePosixPath(*relative.parts[len(runtime_prefix.parts) :])
+                destination = library_directory.joinpath(*export_relative.parts)
+                category = "lib"
+            else:
                 continue
             source = extraction_root.joinpath(*relative.parts)
-            destination = package_directory.joinpath(*relative.parts)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+            _copy_export(source, destination, entry["sha256"])
             exports.append(
                 {
                     "package": artifact["package"],
+                    "category": category,
                     "source_path": relative.as_posix(),
-                    "exported_path": str(destination),
+                    "exported_path": destination.relative_to(temporary).as_posix(),
                     "size": entry["size"],
                     "sha256": entry["sha256"],
                 }
@@ -208,10 +266,22 @@ def _export_dlls(
     export_result = {
         "release": release_name,
         "directory": str(release_directory),
-        "dlls": sorted(exports, key=lambda entry: (entry["package"], entry["source_path"])),
+        "include_directory": str(release_directory / "include"),
+        "lib_directory": str(release_directory / "lib"),
+        "files": sorted(exports, key=lambda entry: (entry["category"], entry["exported_path"])),
     }
-    release_directory.mkdir(parents=True, exist_ok=True)
-    (release_directory / "dll-manifest.json").write_bytes(canonical_bytes(export_result))
+    if not any(entry["category"] == "include" for entry in exports):
+        raise RuntimeError("selected package did not contain build/native/include")
+    if not any(entry["category"] == "lib" for entry in exports):
+        raise RuntimeError("selected package did not contain target Windows native libraries")
+    temporary.mkdir(parents=True, exist_ok=True)
+    (temporary / "sdk-manifest.json").write_bytes(canonical_bytes(export_result))
+    _remove_tree_with_retries(release_directory)
+    try:
+        temporary.replace(release_directory)
+    except PermissionError:
+        shutil.copytree(temporary, release_directory)
+        shutil.rmtree(temporary, ignore_errors=True)
     return export_result
 
 
@@ -246,7 +316,7 @@ def materialize(
     allowed_hosts: set[str],
     allow_demo_source: bool = False,
     allow_non_active_release: bool = False,
-    dll_output_directory: Path | None = None,
+    sdk_output_directory: Path | None = None,
 ) -> dict[str, Any]:
     decision_bytes = decision_path.read_bytes()
     decision = json.loads(decision_bytes)
@@ -276,10 +346,10 @@ def materialize(
     result_path = run_directory / "materialization.json"
     if result_path.exists():
         result = json.loads(result_path.read_text(encoding="utf-8"))
-        if dll_output_directory is not None:
+        if sdk_output_directory is not None:
             result = {
                 **result,
-                "dll_export": _export_dlls(decision, result, dll_output_directory),
+                "sdk_export": _export_sdk_layout(decision, result, sdk_output_directory),
             }
         return result
 
@@ -325,8 +395,8 @@ def materialize(
         "source_trust": source_trust,
         "artifacts": results,
     }
-    if dll_output_directory is not None:
-        result["dll_export"] = _export_dlls(decision, result, dll_output_directory)
+    if sdk_output_directory is not None:
+        result["sdk_export"] = _export_sdk_layout(decision, result, sdk_output_directory)
     result_path.write_bytes(canonical_bytes(result))
     return result
 
@@ -341,10 +411,10 @@ def parse_args() -> argparse.Namespace:
         default=Path(__file__).resolve().parents[1] / "state" / "artifacts",
     )
     parser.add_argument(
-        "--dll-output-directory",
+        "--sdk-output-directory",
         type=Path,
         default=Path(__file__).resolve().parents[1] / "extracted_ort_dlls",
-        help="Directory receiving a release-organized copy of every downloaded DLL.",
+        help="Directory receiving release-organized include/ and lib/ folders.",
     )
     parser.add_argument(
         "--allow-demo-source",
@@ -373,7 +443,7 @@ def main() -> int:
             allowed_hosts,
             allow_demo_source=args.allow_demo_source,
             allow_non_active_release=args.allow_non_active_release,
-            dll_output_directory=args.dll_output_directory,
+            sdk_output_directory=args.sdk_output_directory,
         )
     except (json.JSONDecodeError, KeyError, OSError, RuntimeError) as error:
         print(f"error: {error}", file=sys.stderr)
