@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""Download and safely extract artifacts selected by an agent decision."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import shutil
+import stat
+import sys
+from typing import Any
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+
+
+DEFAULT_ALLOWED_HOSTS = {
+    "api.nuget.org",
+    "globalcdn.nuget.org",
+    "www.nuget.org",
+}
+MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024
+MAX_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
+MAX_ARCHIVE_ENTRIES = 50_000
+
+
+def _canonical_bytes(value: Any) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _validate_url(url: str, allowed_hosts: set[str]) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise RuntimeError(f"artifact URL must use HTTPS: {url}")
+    if parsed.username or parsed.password:
+        raise RuntimeError("artifact URL must not contain credentials")
+    if parsed.hostname.lower() not in allowed_hosts:
+        raise RuntimeError(f"artifact host is not allowed: {parsed.hostname}")
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, allowed_hosts: set[str]) -> None:
+        self._allowed_hosts = allowed_hosts
+        super().__init__()
+
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> urllib.request.Request | None:
+        _validate_url(new_url, self._allowed_hosts)
+        return super().redirect_request(request, file_pointer, code, message, headers, new_url)
+
+
+def _safe_component(value: str) -> str:
+    safe = "".join(character if character.isalnum() or character in "._-" else "_" for character in value)
+    if not safe or safe in {".", ".."}:
+        raise RuntimeError(f"value cannot form a safe path component: {value!r}")
+    return safe
+
+
+def _download(url: str, destination: Path, allowed_hosts: set[str]) -> tuple[str, int, str]:
+    _validate_url(url, allowed_hosts)
+    opener = urllib.request.build_opener(_SafeRedirectHandler(allowed_hosts))
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "trt-rtx-agent-artifact-fetcher/0.1"},
+    )
+    temporary = destination.with_suffix(destination.suffix + ".partial")
+    digest = hashlib.sha256()
+    size = 0
+
+    try:
+        with opener.open(request, timeout=60) as response, temporary.open("wb") as output:
+            final_url = response.geturl()
+            _validate_url(final_url, allowed_hosts)
+            declared_size = response.headers.get("Content-Length")
+            if declared_size and int(declared_size) > MAX_DOWNLOAD_BYTES:
+                raise RuntimeError(f"artifact exceeds {MAX_DOWNLOAD_BYTES} bytes")
+
+            while chunk := response.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_DOWNLOAD_BYTES:
+                    raise RuntimeError(f"artifact exceeds {MAX_DOWNLOAD_BYTES} bytes")
+                digest.update(chunk)
+                output.write(chunk)
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"artifact download failed: {error}") from error
+    except RuntimeError:
+        temporary.unlink(missing_ok=True)
+        raise
+
+    temporary.replace(destination)
+    return digest.hexdigest(), size, final_url
+
+
+def _validated_member_path(member: zipfile.ZipInfo) -> PurePosixPath:
+    if "\\" in member.filename:
+        raise RuntimeError(f"archive entry contains a backslash: {member.filename}")
+    path = PurePosixPath(member.filename)
+    if path.is_absolute() or ".." in path.parts or any(":" in part for part in path.parts):
+        raise RuntimeError(f"unsafe archive entry path: {member.filename}")
+    mode = member.external_attr >> 16
+    if stat.S_ISLNK(mode):
+        raise RuntimeError(f"archive contains a symbolic link: {member.filename}")
+    return path
+
+
+def _extract_zip(archive: Path, destination: Path) -> list[dict[str, Any]]:
+    inventory: list[dict[str, Any]] = []
+    temporary = destination.with_name(destination.name + ".partial")
+    if temporary.exists():
+        shutil.rmtree(temporary)
+    temporary.mkdir(parents=True)
+
+    try:
+        with zipfile.ZipFile(archive) as package:
+            members = package.infolist()
+            if len(members) > MAX_ARCHIVE_ENTRIES:
+                raise RuntimeError(f"archive contains more than {MAX_ARCHIVE_ENTRIES} entries")
+            total_size = sum(member.file_size for member in members)
+            if total_size > MAX_EXTRACTED_BYTES:
+                raise RuntimeError(f"archive expands beyond {MAX_EXTRACTED_BYTES} bytes")
+
+            for member in members:
+                relative = _validated_member_path(member)
+                target = temporary.joinpath(*relative.parts)
+                if member.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+
+                target.parent.mkdir(parents=True, exist_ok=True)
+                file_digest = hashlib.sha256()
+                with package.open(member) as source, target.open("wb") as output:
+                    while chunk := source.read(1024 * 1024):
+                        file_digest.update(chunk)
+                        output.write(chunk)
+                inventory.append(
+                    {
+                        "path": relative.as_posix(),
+                        "size": member.file_size,
+                        "sha256": file_digest.hexdigest(),
+                    }
+                )
+    except (zipfile.BadZipFile, OSError, RuntimeError):
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise
+
+    if destination.exists():
+        shutil.rmtree(destination)
+    temporary.replace(destination)
+    return sorted(inventory, key=lambda entry: entry["path"])
+
+
+def materialize(decision_path: Path, output_directory: Path, allowed_hosts: set[str]) -> dict[str, Any]:
+    decision_bytes = decision_path.read_bytes()
+    decision = json.loads(decision_bytes)
+    if decision.get("decision", {}).get("disposition") != "actionable":
+        raise RuntimeError("only an actionable agent decision may be materialized")
+    selected = decision.get("selected_artifacts")
+    if not isinstance(selected, list) or not selected:
+        raise RuntimeError("agent decision has no selected artifacts")
+
+    decision_sha256 = hashlib.sha256(decision_bytes).hexdigest()
+    run_directory = output_directory / decision_sha256
+    result_path = run_directory / "materialization.json"
+    if result_path.exists():
+        return json.loads(result_path.read_text(encoding="utf-8"))
+
+    run_directory.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, Any]] = []
+    for artifact in selected:
+        url = artifact.get("download_url")
+        if not isinstance(url, str):
+            raise RuntimeError(f"selected artifact {artifact.get('package')!r} has no download_url")
+        name = _safe_component(f"{artifact['package']}-{artifact['version']}")
+        archive = run_directory / f"{name}.nupkg"
+        sha256, size, final_url = _download(url, archive, allowed_hosts)
+        extraction_directory = run_directory / f"{name}-extracted"
+        inventory = _extract_zip(archive, extraction_directory)
+        results.append(
+            {
+                "package": artifact["package"],
+                "version": artifact["version"],
+                "requested_url": url,
+                "final_url": final_url,
+                "archive_path": str(archive),
+                "archive_size": size,
+                "archive_sha256": sha256,
+                "extraction_path": str(extraction_directory),
+                "files": inventory,
+            }
+        )
+
+    result = {
+        "schema_version": 1,
+        "decision_path": str(decision_path),
+        "decision_sha256": decision_sha256,
+        "artifacts": results,
+    }
+    result_path.write_bytes(_canonical_bytes(result))
+    return result
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--decision", required=True, type=Path)
+    parser.add_argument(
+        "--output-directory",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "state" / "artifacts",
+    )
+    parser.add_argument(
+        "--allow-host",
+        action="append",
+        default=[],
+        help="Additional exact HTTPS host allowed for downloads.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    allowed_hosts = DEFAULT_ALLOWED_HOSTS | {host.lower() for host in args.allow_host}
+    try:
+        result = materialize(args.decision, args.output_directory, allowed_hosts)
+    except (json.JSONDecodeError, KeyError, OSError, RuntimeError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

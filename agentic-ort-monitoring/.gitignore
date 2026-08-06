@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Downloaded packages and extracted binaries are local cache, not source.
+state/artifacts/
+

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "source_snapshot_sha256": "3fde04e83b437347056645e08dd6076273fbef70974df2e23f1427ad0cc90a41",
+  "issue": {
+    "repository": "microsoft/onnxruntime",
+    "number": 29831,
+    "url": "https://github.com/microsoft/onnxruntime/issues/29831",
+    "updated_at": "2026-07-26T02:27:07Z"
+  },
+  "decision": {
+    "is_release_candidate": true,
+    "disposition": "actionable",
+    "confidence": "medium",
+    "reasoning": "The issue asks users to validate ORT 1.28.0 before release, identifies a release branch and manager, and publishes prerelease packages. For a Windows x64 standalone EP host, Microsoft.ML.OnnxRuntime is the applicable native base runtime package. The managed package is only the C# binding, while the GPU packages bundle in-tree CUDA/TensorRT providers and are not automatically required merely because the external EP targets NVIDIA hardware. Confidence remains medium until the target EP repository confirms its ONNXRUNTIME_ROOT package contract."
+  },
+  "release": {
+    "version": "1.28.0",
+    "candidate_revision": "rc.1"
+  },
+  "evidence": [
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831",
+      "summary": "The issue says ORT 1.28.0 is pending validation and that release-candidate builds are available for testing."
+    },
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831",
+      "summary": "The issue publishes Microsoft.ML.OnnxRuntime 1.28.0-rc.1 under NuGet CPU packages."
+    },
+    {
+      "source_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1",
+      "summary": "NuGet identifies this as a prerelease native package containing native libraries for supported platforms and the CPU execution provider."
+    },
+    {
+      "source_url": "https://github.com/microsoft/onnxruntime/issues/29831#issuecomment-5081618586",
+      "summary": "The release manager reports incomplete onnxruntime-gpu publication on PyPI due to quota; that limitation does not apply to the selected NuGet CPU package."
+    }
+  ],
+  "candidate_artifacts": [
+    {
+      "package": "Microsoft.ML.OnnxRuntime",
+      "version": "1.28.0-rc.1",
+      "ecosystem": "NuGet",
+      "published_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1",
+      "download_url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0-rc.1/microsoft.ml.onnxruntime.1.28.0-rc.1.nupkg",
+      "target_os": "Windows",
+      "architecture": "x64",
+      "role": "Native ORT host runtime and SDK candidate",
+      "selection_reason": "Provides the base native runtime needed to load a standalone execution provider.",
+      "limitations": [
+        "The target EP repository package-layout contract has not yet been inspected."
+      ],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29831",
+        "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1"
+      ]
+    },
+    {
+      "package": "Microsoft.ML.OnnxRuntime.Managed",
+      "version": "1.28.0-rc.1",
+      "ecosystem": "NuGet",
+      "published_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime.Managed/1.28.0-rc.1",
+      "target_os": null,
+      "architecture": null,
+      "role": "Managed C# bindings",
+      "selection_reason": "Not selected because the planned EP ABI validation is native C/C++ rather than a C# binding test.",
+      "limitations": [],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29831"
+      ]
+    },
+    {
+      "package": "Microsoft.ML.OnnxRuntime.Gpu.Windows",
+      "version": "1.28.0-rc.1",
+      "ecosystem": "NuGet",
+      "published_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime.Gpu.Windows/1.28.0-rc.1",
+      "target_os": "Windows",
+      "architecture": "x64",
+      "role": "Native in-tree CUDA and TensorRT provider payload",
+      "selection_reason": "Not selected because GPU hardware use does not establish that an external plugin EP requires ORT's bundled CUDA/TensorRT provider package.",
+      "limitations": [],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29831"
+      ]
+    }
+  ],
+  "selected_artifacts": [
+    {
+      "package": "Microsoft.ML.OnnxRuntime",
+      "version": "1.28.0-rc.1",
+      "ecosystem": "NuGet",
+      "published_url": "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1",
+      "download_url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0-rc.1/microsoft.ml.onnxruntime.1.28.0-rc.1.nupkg",
+      "target_os": "Windows",
+      "architecture": "x64",
+      "role": "Native ORT host runtime and SDK candidate",
+      "selection_reason": "Provides the base native runtime needed to load a standalone execution provider.",
+      "limitations": [
+        "The target EP repository package-layout contract has not yet been inspected."
+      ],
+      "evidence_urls": [
+        "https://github.com/microsoft/onnxruntime/issues/29831",
+        "https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.28.0-rc.1"
+      ]
+    }
+  ],
+  "ambiguities": [
+    "The target EP repository is not present, so its exact ONNXRUNTIME_ROOT package and directory expectations remain unverified.",
+    "The issue publishes several Python and CUDA-specific packages; they were read but are not candidates for the current native Windows host-runtime role."
+  ]
+}
